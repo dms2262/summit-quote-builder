@@ -1,0 +1,926 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Summit Cabinets - Full Custom Quote Builder (CSV Edition)</title>
+  <style>
+    * { margin: 0; padding: 0; box-sizing: border-box; }
+    body {
+      margin: 0;
+      font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', 'Roboto', sans-serif;
+      -webkit-font-smoothing: antialiased;
+    }
+    input[type="number"]::-webkit-inner-spin-button,
+    input[type="number"]::-webkit-outer-spin-button { opacity: 1; }
+    ::-webkit-scrollbar { width: 10px; height: 10px; }
+    ::-webkit-scrollbar-track { background: rgba(0,0,0,0.2); }
+    ::-webkit-scrollbar-thumb { background: rgba(53, 70, 133, 0.5); border-radius: 5px; }
+    ::-webkit-scrollbar-thumb:hover { background: rgba(53, 70, 133, 0.7); }
+    @media print {
+      .no-print { display: none !important; }
+      body { background: white !important; }
+    }
+    .loading-screen {
+      position: fixed;
+      top: 0;
+      left: 0;
+      right: 0;
+      bottom: 0;
+      background: linear-gradient(135deg, #f8f9fa 0%, #e9ecef 100%);
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      z-index: 9999;
+    }
+    .loading-content {
+      text-align: center;
+      color: #354685;
+    }
+    .spinner {
+      border: 4px solid #f3f3f3;
+      border-top: 4px solid #354685;
+      border-radius: 50%;
+      width: 50px;
+      height: 50px;
+      animation: spin 1s linear infinite;
+      margin: 0 auto 1rem;
+    }
+    @keyframes spin {
+      0% { transform: rotate(0deg); }
+      100% { transform: rotate(360deg); }
+    }
+  </style>
+</head>
+<body>
+  <div id="loading" class="loading-screen">
+    <div class="loading-content">
+      <div class="spinner"></div>
+      <h2>Summit Cabinets Quote Builder</h2>
+      <p>Loading pricing data...</p>
+    </div>
+  </div>
+  <div id="root"></div>
+  
+  <script crossorigin src="https://unpkg.com/react@18/umd/react.production.min.js"></script>
+  <script crossorigin src="https://unpkg.com/react-dom@18/umd/react-dom.production.min.js"></script>
+  <script src="https://unpkg.com/@babel/standalone/babel.min.js"></script>
+  
+  <script type="text/babel">
+    const { useState, useEffect } = React;
+
+    // Brand Colors
+    const BRAND_COLORS = {
+      primary: '#354685',
+      primaryRGB: 'rgb(53, 70, 133)',
+      light: '#f8f9fa',
+      dark: '#1a1a1a',
+      accent: '#6b7db3'
+    };
+
+    const LABOR_RATE = 37;
+    const MARGIN_OPTIONS = [
+      { label: "30% Margin", margin: 0.30, markup: 0.42 },
+      { label: "35% Margin", margin: 0.35, markup: 0.53 },
+      { label: "40% Margin", margin: 0.40, markup: 0.66 },
+      { label: "45% Margin", margin: 0.45, markup: 0.81 },
+      { label: "50% Margin (Default)", margin: 0.50, markup: 1.00 },
+      { label: "55% Margin", margin: 0.55, markup: 1.22 }
+    ];
+
+    const ROOM_TYPES = [
+      "Kitchen", "Master Bath", "Bath 1", "Bath 2", "Utility Room", "Wet Bar",
+      "Laundry", "Pantry", "Butler's Pantry", "Mudroom", "Office", "Custom"
+    ];
+
+    const BOILERPLATE_TEXT = `Excludes knobs and pulls. Summit Cabinets can source knobs and pulls after design approval, if specifications are provided, for an additional cost.
+
+Payment Terms:
+50% of total due to generate order and start design drawings.
+40% due prior to delivery or upon completion in our shop if the customer is unable to take delivery upon completion. If the customer cannot take delivery in 10 days, additional packing, storage, and transportation fees will apply.
+The remaining 10% balance is due upon completion of final punch-list, unless there are cabinets that rely on the counter top installation or other trades, in which case 7.5% is due at time of initial installation, and the remainder will be due after the punch-list completion.
+
+Prices subject to change per final measurements and per any additions or deletions by customer. Prices do not include counter tops unless specified. Price quote valid for 30 days. Emails, voicemails, or text messages by either party do not constitute a contract. Only change orders written on Summit Cabinets change order forms and signed by both Summit Cabinets and the customer will be valid.
+
+Cabinets are made from natural wood, and certain surface imperfections, grain differences, and shade/color variations will exist. This is just the natural characteristic of wood products. Due to the color and grain variations that occur naturally in wood, paint and stain colors may vary 10%-15% from the approved sample.
+
+Appliance Disclaimer: Summit Cabinets designs and builds cabinets according to manufacturer's appliance specifications. Summit Cabinets is not responsible for the accuracy of appliance manufacturer's specifications. If actual appliances are not within manufacturer's printed specifications, and Summit Cabinets must modify a cabinet, there will be a minimum surcharge of $250 plus $50 hourly plus material costs.`;
+
+    // CSV Parser
+    function parseCSV(text) {
+      const lines = text.trim().split('\n');
+      const headers = lines[0].split(',').map(h => h.trim());
+      const data = [];
+
+      for (let i = 1; i < lines.length; i++) {
+        const line = lines[i];
+        if (!line.trim()) continue;
+
+        const values = [];
+        let currentValue = '';
+        let inQuotes = false;
+
+        for (let j = 0; j < line.length; j++) {
+          const char = line[j];
+          
+          if (char === '"') {
+            if (inQuotes && line[j + 1] === '"') {
+              currentValue += '"';
+              j++;
+            } else {
+              inQuotes = !inQuotes;
+            }
+          } else if (char === ',' && !inQuotes) {
+            values.push(currentValue.trim());
+            currentValue = '';
+          } else {
+            currentValue += char;
+          }
+        }
+        values.push(currentValue.trim());
+
+        const obj = {};
+        headers.forEach((header, index) => {
+          let value = values[index] || '';
+          
+          if (header === 'id') {
+            obj[header] = parseInt(value);
+          } else if (header === 'materialCostPerUnit' || header === 'laborCostPerUnit') {
+            obj[header] = parseFloat(value);
+          } else {
+            obj[header] = value;
+          }
+        });
+        
+        data.push(obj);
+      }
+
+      return data;
+    }
+
+    // Load CSV
+    async function loadProductCatalog() {
+      try {
+        const response = await fetch('pricing-data.csv');
+        if (!response.ok) throw new Error('Could not load pricing data');
+        const csvText = await response.text();
+        const catalog = parseCSV(csvText);
+        console.log('✅ Loaded', catalog.length, 'products from pricing-data.csv');
+        return catalog;
+      } catch (error) {
+        console.error('❌ Error loading pricing data:', error);
+        throw error;
+      }
+    }
+
+    function calculateTrimSuggestions(lineItems, PRODUCT_CATALOG) {
+      let baseLF = 0, wallLF = 0, tallLF = 0;
+
+      lineItems.forEach(item => {
+        const product = PRODUCT_CATALOG.find(p => p.id === item.productId);
+        if (!product) return;
+
+        if (product.name.includes("Base") || product.name.includes("Vanity")) {
+          baseLF += item.quantity || 0;
+        } else if (product.name.includes("Wall")) {
+          wallLF += item.quantity || 0;
+        } else if (product.name.includes("Tall") || product.name.includes("Pantry") || product.name.includes("Fridge")) {
+          tallLF += item.quantity || 0;
+        }
+      });
+
+      const roundToEight = (num) => Math.ceil(num / 8) * 8;
+
+      return {
+        crown: roundToEight(wallLF + tallLF),
+        toeKick: roundToEight(baseLF),
+        baseTrim: roundToEight(baseLF / 3)
+      };
+    }
+
+    function generateRoomNarrative(room, PRODUCT_CATALOG) {
+      let narrative = "";
+      const cabinets = [], panels = [], trim = [], upgrades = [];
+      let totalDrawers = 0;
+
+      room.lineItems.forEach(item => {
+        const product = PRODUCT_CATALOG.find(p => p.id === item.productId);
+        if (!product || !item.quantity) return;
+
+        if (product.category === 'cabinets') {
+          if (product.name.includes("Base") || product.name.includes("Vanity")) {
+            totalDrawers += Math.floor(item.quantity / 2.5);
+          }
+          cabinets.push({ product, qty: item.quantity });
+        } else if (product.category === 'panels') {
+          panels.push({ product, qty: item.quantity });
+        } else if (product.category === 'trim') {
+          trim.push({ product, qty: item.quantity });
+        } else if (product.category === 'upgrades') {
+          upgrades.push({ product, qty: item.quantity });
+        }
+      });
+
+      if (cabinets.length > 0) {
+        const cabinetDescriptions = cabinets.map(({ product, qty }) => {
+          let desc = product.narrativeTemplate || product.name;
+          desc = desc.replace("{drawers}", totalDrawers);
+          return `${Math.round(qty)} LF of ${desc}`;
+        });
+        narrative += "Approximately " + cabinetDescriptions.join(". These numbers include ") + ". ";
+      }
+
+      if (panels.length > 0) {
+        narrative += panels.map(({ product }) => product.narrativeTemplate || product.name).join(", ") + ". ";
+      }
+
+      if (upgrades.length > 0) {
+        narrative += upgrades.map(({ product }) => product.narrativeTemplate || product.name).join(", ") + ". ";
+      }
+
+      if (trim.length > 0) {
+        narrative += "Also includes all trim including " + 
+          trim.map(({ product }) => product.narrativeTemplate || product.name.toLowerCase()).join(", ") + 
+          " for each area.";
+      }
+
+      return narrative || "Custom cabinetry as specified.";
+    }
+
+    // Main App Component
+    function SummitQuoteBuilder() {
+      const [step, setStep] = useState(1);
+      const [productCatalog, setProductCatalog] = useState([]);
+      const [loading, setLoading] = useState(true);
+      const [loadError, setLoadError] = useState(null);
+      const [quote, setQuote] = useState({
+        quoteNumber: '',
+        customerName: '',
+        projectName: '',
+        quoteDate: new Date().toLocaleDateString(),
+        constructionType: 'frameless',
+        doorStyle: 'Shaker',
+        finish: 'Painted',
+        rooms: [],
+        marginOption: 4,
+        deliveryCost: 1600,
+        installationPercent: 20,
+        commissionPercent: 5,
+        additionalNotes: '',
+        status: 'draft'
+      });
+
+      // Load product catalog on mount
+      useEffect(() => {
+        loadProductCatalog()
+          .then(catalog => {
+            setProductCatalog(catalog);
+            setLoading(false);
+            document.getElementById('loading').style.display = 'none';
+          })
+          .catch(error => {
+            setLoadError(error.message);
+            setLoading(false);
+            document.getElementById('loading').innerHTML = `
+              <div class="loading-content">
+                <h2 style="color: #dc3545;">⚠️ Error Loading Pricing Data</h2>
+                <p>Could not find pricing-data.csv</p>
+                <p style="font-size: 0.875rem; margin-top: 1rem;">
+                  Make sure pricing-data.csv is in the same folder as this HTML file.
+                </p>
+              </div>
+            `;
+          });
+      }, []);
+
+      const addRoom = (roomType) => {
+        const newRoom = {
+          id: Date.now(),
+          name: roomType,
+          lineItems: [],
+          customNarrative: ''
+        };
+        setQuote(prev => ({ ...prev, rooms: [...prev.rooms, newRoom] }));
+      };
+
+      const updateRoom = (roomId, updates) => {
+        setQuote(prev => ({
+          ...prev,
+          rooms: prev.rooms.map(room => 
+            room.id === roomId ? { ...room, ...updates } : room
+          )
+        }));
+      };
+
+      const deleteRoom = (roomId) => {
+        setQuote(prev => ({
+          ...prev,
+          rooms: prev.rooms.filter(room => room.id !== roomId)
+        }));
+      };
+
+      const addLineItem = (roomId, productId) => {
+        const product = productCatalog.find(p => p.id === productId);
+        const newItem = {
+          id: Date.now(),
+          productId: productId,
+          quantity: 0,
+          materialCostPer: product.materialCostPerUnit,
+          laborCostPer: product.laborCostPerUnit
+        };
+
+        setQuote(prev => ({
+          ...prev,
+          rooms: prev.rooms.map(room => 
+            room.id === roomId 
+              ? { ...room, lineItems: [...room.lineItems, newItem] }
+              : room
+          )
+        }));
+      };
+
+      const updateLineItem = (roomId, itemId, updates) => {
+        setQuote(prev => ({
+          ...prev,
+          rooms: prev.rooms.map(room => 
+            room.id === roomId
+              ? {
+                  ...room,
+                  lineItems: room.lineItems.map(item =>
+                    item.id === itemId ? { ...item, ...updates } : item
+                  )
+                }
+              : room
+          )
+        }));
+      };
+
+      const deleteLineItem = (roomId, itemId) => {
+        setQuote(prev => ({
+          ...prev,
+          rooms: prev.rooms.map(room => 
+            room.id === roomId
+              ? {
+                  ...room,
+                  lineItems: room.lineItems.filter(item => item.id !== itemId)
+                }
+              : room
+          )
+        }));
+      };
+
+      const calculateTotals = () => {
+        let totalMaterials = 0;
+        let totalLabor = 0;
+
+        quote.rooms.forEach(room => {
+          room.lineItems.forEach(item => {
+            const qty = item.quantity || 0;
+            totalMaterials += item.materialCostPer * qty;
+            totalLabor += item.laborCostPer * qty;
+          });
+        });
+
+        const subtotalCost = totalMaterials + totalLabor;
+        const marginData = MARGIN_OPTIONS[quote.marginOption];
+        const subtotalWithMargin = subtotalCost * (1 + marginData.markup);
+        const faceFrameUpcharge = quote.constructionType === 'faceframe' ? subtotalWithMargin * 0.15 : 0;
+        const installationCost = (subtotalWithMargin + faceFrameUpcharge) * (quote.installationPercent / 100);
+        const commissionCost = (subtotalWithMargin + faceFrameUpcharge) * (quote.commissionPercent / 100);
+        const totalQuotePrice = subtotalWithMargin + faceFrameUpcharge + quote.deliveryCost + installationCost + commissionCost;
+
+        return {
+          totalMaterials,
+          totalLabor,
+          subtotalCost,
+          marginData,
+          subtotalWithMargin,
+          faceFrameUpcharge,
+          deliveryCost: quote.deliveryCost,
+          installationCost,
+          commissionCost,
+          totalQuotePrice
+        };
+      };
+
+      const totals = calculateTotals();
+
+      if (loading || loadError) {
+        return null; // Loading screen handles display
+      }
+
+      return (
+        <div style={{
+          minHeight: '100vh',
+          background: 'linear-gradient(135deg, #f8f9fa 0%, #e9ecef 100%)',
+          fontFamily: '"Segoe UI", Roboto, "Helvetica Neue", Arial, sans-serif'
+        }}>
+          <Header totals={totals} />
+          <StepNavigation step={step} setStep={setStep} />
+          
+          <main style={{ maxWidth: '1400px', margin: '0 auto', padding: '2rem' }}>
+            {step === 1 && <ProjectInfoStep quote={quote} setQuote={setQuote} onNext={() => setStep(2)} />}
+            {step === 2 && <BuildQuoteStep quote={quote} addRoom={addRoom} updateRoom={updateRoom} deleteRoom={deleteRoom} addLineItem={addLineItem} updateLineItem={updateLineItem} deleteLineItem={deleteLineItem} productCatalog={productCatalog} onNext={() => setStep(3)} onBack={() => setStep(1)} />}
+            {step === 3 && <PricingReviewStep quote={quote} setQuote={setQuote} totals={totals} onNext={() => setStep(4)} onBack={() => setStep(2)} />}
+            {step === 4 && <QuoteDocumentStep quote={quote} totals={totals} productCatalog={productCatalog} onBack={() => setStep(3)} />}
+          </main>
+        </div>
+      );
+    }
+
+    function Header({ totals }) {
+      return (
+        <header style={{
+          background: 'white',
+          padding: '1.5rem 2rem',
+          borderBottom: `3px solid ${BRAND_COLORS.primary}`,
+          boxShadow: '0 2px 8px rgba(0,0,0,0.1)'
+        }}>
+          <div style={{ maxWidth: '1400px', margin: '0 auto', display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
+            <div>
+              <div style={{ fontWeight: '700', fontSize: '1.5rem', color: BRAND_COLORS.primary, fontFamily: 'Georgia, serif' }}>
+                SUMMIT CABINETS
+              </div>
+              <div style={{ fontSize: '0.75rem', color: '#666', marginTop: '0.25rem' }}>
+                Full Custom Quote Builder
+              </div>
+            </div>
+            <div style={{ textAlign: 'right' }}>
+              <div style={{ fontSize: '0.875rem', color: '#666' }}>Quote Total</div>
+              <div style={{ fontSize: '2rem', fontWeight: '700', color: BRAND_COLORS.primary }}>
+                ${totals.totalQuotePrice.toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
+              </div>
+            </div>
+          </div>
+        </header>
+      );
+    }
+
+    function StepNavigation({ step, setStep }) {
+      return (
+        <div style={{ background: 'white', padding: '1rem 2rem', borderBottom: '1px solid #dee2e6', boxShadow: '0 1px 3px rgba(0,0,0,0.05)' }} className="no-print">
+          <div style={{ maxWidth: '1400px', margin: '0 auto', display: 'flex', gap: '2rem' }}>
+            {['Project Info', 'Build Quote', 'Pricing & Review', 'Generate Document'].map((label, idx) => (
+              <button key={idx} onClick={() => setStep(idx + 1)} style={{
+                background: step === idx + 1 ? BRAND_COLORS.primary : 'transparent',
+                color: step === idx + 1 ? 'white' : '#666',
+                border: '2px solid',
+                borderColor: step === idx + 1 ? BRAND_COLORS.primary : '#dee2e6',
+                padding: '0.75rem 1.5rem',
+                cursor: 'pointer',
+                fontSize: '0.875rem',
+                fontWeight: '600',
+                borderRadius: '6px',
+                transition: 'all 0.2s'
+              }}>
+                {idx + 1}. {label}
+              </button>
+            ))}
+          </div>
+        </div>
+      );
+    }
+
+    function ProjectInfoStep({ quote, setQuote, onNext }) {
+      return (
+        <div style={{ background: 'white', padding: '3rem', borderRadius: '8px', boxShadow: '0 2px 8px rgba(0,0,0,0.1)', maxWidth: '800px', margin: '0 auto' }}>
+          <h2 style={{ marginTop: 0, color: BRAND_COLORS.primary, fontSize: '1.75rem', fontWeight: '600', marginBottom: '2rem' }}>
+            Project Information
+          </h2>
+          
+          <div style={{ display: 'flex', flexDirection: 'column', gap: '1.5rem' }}>
+            <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '1rem' }}>
+              <div>
+                <label style={{ display: 'block', marginBottom: '0.5rem', fontSize: '0.875rem', color: '#495057', fontWeight: '600' }}>Quote Number</label>
+                <input type="text" value={quote.quoteNumber} onChange={(e) => setQuote(prev => ({ ...prev, quoteNumber: e.target.value }))} placeholder="e.g., 1965" style={{ width: '100%', padding: '0.75rem', background: '#f8f9fa', border: '2px solid #dee2e6', color: '#212529', fontSize: '1rem', borderRadius: '6px', outline: 'none' }} />
+              </div>
+              <div>
+                <label style={{ display: 'block', marginBottom: '0.5rem', fontSize: '0.875rem', color: '#495057', fontWeight: '600' }}>Quote Date</label>
+                <input type="text" value={quote.quoteDate} onChange={(e) => setQuote(prev => ({ ...prev, quoteDate: e.target.value }))} style={{ width: '100%', padding: '0.75rem', background: '#f8f9fa', border: '2px solid #dee2e6', color: '#212529', fontSize: '1rem', borderRadius: '6px', outline: 'none' }} />
+              </div>
+            </div>
+
+            <div>
+              <label style={{ display: 'block', marginBottom: '0.5rem', fontSize: '0.875rem', color: '#495057', fontWeight: '600' }}>Customer Name</label>
+              <input type="text" value={quote.customerName} onChange={(e) => setQuote(prev => ({ ...prev, customerName: e.target.value }))} placeholder="e.g., Cummings" style={{ width: '100%', padding: '0.75rem', background: '#f8f9fa', border: '2px solid #dee2e6', color: '#212529', fontSize: '1rem', borderRadius: '6px', outline: 'none' }} />
+            </div>
+
+            <div>
+              <label style={{ display: 'block', marginBottom: '0.5rem', fontSize: '0.875rem', color: '#495057', fontWeight: '600' }}>Project Name</label>
+              <input type="text" value={quote.projectName} onChange={(e) => setQuote(prev => ({ ...prev, projectName: e.target.value }))} placeholder="e.g., Budgetary Quote - Base Plan" style={{ width: '100%', padding: '0.75rem', background: '#f8f9fa', border: '2px solid #dee2e6', color: '#212529', fontSize: '1rem', borderRadius: '6px', outline: 'none' }} />
+            </div>
+
+            <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr 1fr', gap: '1rem' }}>
+              <div>
+                <label style={{ display: 'block', marginBottom: '0.5rem', fontSize: '0.875rem', color: '#495057', fontWeight: '600' }}>Door Style</label>
+                <select value={quote.doorStyle} onChange={(e) => setQuote(prev => ({ ...prev, doorStyle: e.target.value }))} style={{ width: '100%', padding: '0.75rem', background: '#f8f9fa', border: '2px solid #dee2e6', color: '#212529', fontSize: '1rem', borderRadius: '6px', outline: 'none' }}>
+                  <option>Shaker</option>
+                  <option>Flat Panel</option>
+                  <option>Raised Panel</option>
+                  <option>Beadboard</option>
+                </select>
+              </div>
+              <div>
+                <label style={{ display: 'block', marginBottom: '0.5rem', fontSize: '0.875rem', color: '#495057', fontWeight: '600' }}>Finish</label>
+                <select value={quote.finish} onChange={(e) => setQuote(prev => ({ ...prev, finish: e.target.value }))} style={{ width: '100%', padding: '0.75rem', background: '#f8f9fa', border: '2px solid #dee2e6', color: '#212529', fontSize: '1rem', borderRadius: '6px', outline: 'none' }}>
+                  <option>Painted</option>
+                  <option>Stained</option>
+                  <option>Natural</option>
+                </select>
+              </div>
+              <div>
+                <label style={{ display: 'block', marginBottom: '0.5rem', fontSize: '0.875rem', color: '#495057', fontWeight: '600' }}>Construction</label>
+                <select value={quote.constructionType} onChange={(e) => setQuote(prev => ({ ...prev, constructionType: e.target.value }))} style={{ width: '100%', padding: '0.75rem', background: '#f8f9fa', border: '2px solid #dee2e6', color: '#212529', fontSize: '1rem', borderRadius: '6px', outline: 'none' }}>
+                  <option value="frameless">Frameless</option>
+                  <option value="faceframe">Face Frame (+15%)</option>
+                </select>
+              </div>
+            </div>
+
+            <button onClick={onNext} disabled={!quote.customerName || !quote.projectName} style={{ marginTop: '1rem', padding: '1rem 2rem', background: quote.customerName && quote.projectName ? BRAND_COLORS.primary : '#dee2e6', color: 'white', border: 'none', fontSize: '1rem', fontWeight: '600', cursor: quote.customerName && quote.projectName ? 'pointer' : 'not-allowed', borderRadius: '6px', transition: 'all 0.2s' }}>
+              Continue to Build Quote →
+            </button>
+          </div>
+        </div>
+      );
+    }
+
+    function BuildQuoteStep({ quote, addRoom, updateRoom, deleteRoom, addLineItem, updateLineItem, deleteLineItem, productCatalog, onNext, onBack }) {
+      const [showRoomSelector, setShowRoomSelector] = useState(false);
+      
+      return (
+        <div>
+          <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '2rem' }}>
+            <h2 style={{ margin: 0, color: BRAND_COLORS.primary, fontSize: '1.75rem', fontWeight: '600' }}>Build Quote - Room by Room</h2>
+            <button onClick={() => setShowRoomSelector(true)} style={{ padding: '0.75rem 1.5rem', background: BRAND_COLORS.primary, color: 'white', border: 'none', fontSize: '0.875rem', fontWeight: '600', cursor: 'pointer', borderRadius: '6px', transition: 'all 0.2s' }}>+ Add Room</button>
+          </div>
+
+          {showRoomSelector && (
+            <div style={{ position: 'fixed', top: 0, left: 0, right: 0, bottom: 0, background: 'rgba(0,0,0,0.5)', display: 'flex', alignItems: 'center', justifyContent: 'center', zIndex: 1000 }}>
+              <div style={{ background: 'white', padding: '2rem', borderRadius: '8px', boxShadow: '0 4px 20px rgba(0,0,0,0.15)', maxWidth: '500px', width: '100%' }}>
+                <h3 style={{ marginTop: 0, color: BRAND_COLORS.primary }}>Select Room Type</h3>
+                <div style={{ display: 'grid', gridTemplateColumns: 'repeat(2, 1fr)', gap: '0.5rem', marginTop: '1rem' }}>
+                  {ROOM_TYPES.map(roomType => (
+                    <button key={roomType} onClick={() => { addRoom(roomType); setShowRoomSelector(false); }} style={{ padding: '0.75rem', background: '#f8f9fa', color: BRAND_COLORS.primary, border: '2px solid #dee2e6', cursor: 'pointer', fontSize: '0.875rem', borderRadius: '6px', fontWeight: '500', transition: 'all 0.2s' }}>
+                      {roomType}
+                    </button>
+                  ))}
+                </div>
+                <button onClick={() => setShowRoomSelector(false)} style={{ marginTop: '1rem', padding: '0.5rem 1rem', background: 'transparent', color: '#6c757d', border: '2px solid #dee2e6', cursor: 'pointer', fontSize: '0.875rem', borderRadius: '6px', width: '100%' }}>Cancel</button>
+              </div>
+            </div>
+          )}
+
+          {quote.rooms.length === 0 ? (
+            <div style={{ background: 'white', padding: '3rem', borderRadius: '8px', border: '2px dashed #dee2e6', textAlign: 'center' }}>
+              <p style={{ color: '#6c757d', fontSize: '1.125rem' }}>No rooms added yet. Click "Add Room" to get started.</p>
+            </div>
+          ) : (
+            <div style={{ display: 'flex', flexDirection: 'column', gap: '1.5rem' }}>
+              {quote.rooms.map(room => (
+                <RoomCard key={room.id} room={room} updateRoom={updateRoom} deleteRoom={deleteRoom} addLineItem={addLineItem} updateLineItem={updateLineItem} deleteLineItem={deleteLineItem} productCatalog={productCatalog} />
+              ))}
+            </div>
+          )}
+
+          <div style={{ display: 'flex', justifyContent: 'space-between', marginTop: '2rem' }}>
+            <button onClick={onBack} style={{ padding: '0.75rem 1.5rem', background: 'white', color: BRAND_COLORS.primary, border: `2px solid ${BRAND_COLORS.primary}`, fontSize: '0.875rem', fontWeight: '600', cursor: 'pointer', borderRadius: '6px' }}>← Back</button>
+            <button onClick={onNext} disabled={quote.rooms.length === 0} style={{ padding: '0.75rem 1.5rem', background: quote.rooms.length > 0 ? BRAND_COLORS.primary : '#dee2e6', color: 'white', border: 'none', fontSize: '0.875rem', fontWeight: '600', cursor: quote.rooms.length > 0 ? 'pointer' : 'not-allowed', borderRadius: '6px' }}>Continue to Pricing →</button>
+          </div>
+        </div>
+      );
+    }
+
+    function RoomCard({ room, updateRoom, deleteRoom, addLineItem, updateLineItem, deleteLineItem, productCatalog }) {
+      const [showProductSelector, setShowProductSelector] = useState(false);
+      const [showTrimSuggestions, setShowTrimSuggestions] = useState(false);
+
+      const trimSuggestions = calculateTrimSuggestions(room.lineItems, productCatalog);
+      const roomTotal = room.lineItems.reduce((sum, item) => {
+        const qty = item.quantity || 0;
+        return sum + (item.materialCostPer * qty) + (item.laborCostPer * qty);
+      }, 0);
+
+      return (
+        <div style={{ background: 'white', padding: '1.5rem', borderRadius: '8px', boxShadow: '0 2px 8px rgba(0,0,0,0.1)', border: '2px solid #dee2e6' }}>
+          <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '1rem' }}>
+            <div>
+              <h3 style={{ margin: 0, color: BRAND_COLORS.primary, fontSize: '1.25rem', fontWeight: '600' }}>{room.name}</h3>
+              <span style={{ color: '#6c757d', fontSize: '0.875rem' }}>${roomTotal.toLocaleString('en-US', { minimumFractionDigits: 2 })}</span>
+            </div>
+            <div style={{ display: 'flex', gap: '0.5rem' }}>
+              <button onClick={() => setShowTrimSuggestions(true)} style={{ padding: '0.5rem 1rem', background: '#f8f9fa', color: BRAND_COLORS.primary, border: '2px solid #dee2e6', fontSize: '0.75rem', fontWeight: '500', cursor: 'pointer', borderRadius: '6px' }}>Suggest Trim</button>
+              <button onClick={() => setShowProductSelector(true)} style={{ padding: '0.5rem 1rem', background: BRAND_COLORS.primary, color: 'white', border: 'none', fontSize: '0.75rem', fontWeight: '500', cursor: 'pointer', borderRadius: '6px' }}>+ Add Item</button>
+              <button onClick={() => deleteRoom(room.id)} style={{ padding: '0.5rem 1rem', background: '#dc3545', color: 'white', border: 'none', fontSize: '0.75rem', fontWeight: '500', cursor: 'pointer', borderRadius: '6px' }}>Delete</button>
+            </div>
+          </div>
+
+          {showTrimSuggestions && <TrimSuggestionsModal trimSuggestions={trimSuggestions} roomId={room.id} addLineItem={addLineItem} productCatalog={productCatalog} onClose={() => setShowTrimSuggestions(false)} />}
+          {showProductSelector && <ProductSelector onSelect={(productId) => { addLineItem(room.id, productId); setShowProductSelector(false); }} productCatalog={productCatalog} onClose={() => setShowProductSelector(false)} />}
+
+          {room.lineItems.length === 0 ? (
+            <p style={{ color: '#6c757d', fontSize: '0.875rem', fontStyle: 'italic', margin: '1rem 0' }}>No items added yet. Click "Add Item" to start.</p>
+          ) : (
+            <div style={{ display: 'flex', flexDirection: 'column', gap: '0.5rem' }}>
+              {room.lineItems.map(item => {
+                const product = productCatalog.find(p => p.id === item.productId);
+                const extended = (item.quantity || 0) * (item.materialCostPer + item.laborCostPer);
+                
+                return (
+                  <div key={item.id} style={{ display: 'grid', gridTemplateColumns: '2fr 1fr 1fr 1fr auto', gap: '1rem', alignItems: 'center', padding: '0.75rem', background: '#f8f9fa', borderRadius: '6px' }}>
+                    <div>
+                      <div style={{ color: '#212529', fontSize: '0.875rem', fontWeight: '600' }}>{product?.name}</div>
+                      <div style={{ color: '#6c757d', fontSize: '0.75rem', marginTop: '0.25rem' }}>{product?.description}</div>
+                    </div>
+                    <div>
+                      <input type="number" value={item.quantity || ''} onChange={(e) => updateLineItem(room.id, item.id, { quantity: parseFloat(e.target.value) || 0 })} placeholder="0" style={{ width: '100%', padding: '0.5rem', background: 'white', border: '2px solid #dee2e6', color: '#212529', fontSize: '0.875rem', borderRadius: '6px', outline: 'none' }} />
+                      <div style={{ color: '#6c757d', fontSize: '0.75rem', marginTop: '0.25rem' }}>{product?.unit}</div>
+                    </div>
+                    <div style={{ color: '#6c757d', fontSize: '0.875rem' }}>${(item.materialCostPer + item.laborCostPer).toFixed(2)}/{product?.unit}</div>
+                    <div style={{ color: BRAND_COLORS.primary, fontSize: '0.875rem', fontWeight: '600' }}>${extended.toFixed(2)}</div>
+                    <button onClick={() => deleteLineItem(room.id, item.id)} style={{ padding: '0.5rem', background: '#dc3545', color: 'white', border: 'none', fontSize: '0.75rem', cursor: 'pointer', borderRadius: '6px' }}>✕</button>
+                  </div>
+                );
+              })}
+            </div>
+          )}
+        </div>
+      );
+    }
+
+    function TrimSuggestionsModal({ trimSuggestions, roomId, addLineItem, productCatalog, onClose }) {
+      return (
+        <div style={{ position: 'fixed', top: 0, left: 0, right: 0, bottom: 0, background: 'rgba(0,0,0,0.5)', display: 'flex', alignItems: 'center', justifyContent: 'center', zIndex: 1000 }}>
+          <div style={{ background: 'white', padding: '2rem', borderRadius: '8px', boxShadow: '0 4px 20px rgba(0,0,0,0.15)', maxWidth: '500px', width: '100%' }}>
+            <h3 style={{ marginTop: 0, color: BRAND_COLORS.primary }}>Suggested Trim Quantities</h3>
+            <p style={{ color: '#6c757d', fontSize: '0.875rem', marginBottom: '1.5rem' }}>Based on your cabinet quantities (rounded to 8' increments):</p>
+            
+            <div style={{ display: 'flex', flexDirection: 'column', gap: '1rem' }}>
+              {trimSuggestions.crown > 0 && (
+                <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', padding: '0.75rem', background: '#f8f9fa', borderRadius: '6px' }}>
+                  <span>Crown Molding</span>
+                  <div style={{ display: 'flex', alignItems: 'center', gap: '0.5rem' }}>
+                    <span style={{ color: BRAND_COLORS.primary, fontWeight: '600' }}>{trimSuggestions.crown} LF</span>
+                    <button onClick={() => { const crownProduct = productCatalog.find(p => p.name === 'Crown'); addLineItem(roomId, crownProduct.id); onClose(); }} style={{ padding: '0.25rem 0.75rem', background: BRAND_COLORS.primary, color: 'white', border: 'none', fontSize: '0.75rem', cursor: 'pointer', borderRadius: '6px' }}>Add</button>
+                  </div>
+                </div>
+              )}
+              
+              {trimSuggestions.toeKick > 0 && (
+                <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', padding: '0.75rem', background: '#f8f9fa', borderRadius: '6px' }}>
+                  <span>Toe Kick</span>
+                  <div style={{ display: 'flex', alignItems: 'center', gap: '0.5rem' }}>
+                    <span style={{ color: BRAND_COLORS.primary, fontWeight: '600' }}>{trimSuggestions.toeKick} LF</span>
+                    <button onClick={() => { const toeKickProduct = productCatalog.find(p => p.name === 'Toe Kick'); addLineItem(roomId, toeKickProduct.id); onClose(); }} style={{ padding: '0.25rem 0.75rem', background: BRAND_COLORS.primary, color: 'white', border: 'none', fontSize: '0.75rem', cursor: 'pointer', borderRadius: '6px' }}>Add</button>
+                  </div>
+                </div>
+              )}
+              
+              {trimSuggestions.baseTrim > 0 && (
+                <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', padding: '0.75rem', background: '#f8f9fa', borderRadius: '6px' }}>
+                  <span>Base Trim</span>
+                  <div style={{ display: 'flex', alignItems: 'center', gap: '0.5rem' }}>
+                    <span style={{ color: BRAND_COLORS.primary, fontWeight: '600' }}>{trimSuggestions.baseTrim} LF</span>
+                    <button onClick={() => { const baseTrimProduct = productCatalog.find(p => p.name === 'Base Trim'); addLineItem(roomId, baseTrimProduct.id); onClose(); }} style={{ padding: '0.25rem 0.75rem', background: BRAND_COLORS.primary, color: 'white', border: 'none', fontSize: '0.75rem', cursor: 'pointer', borderRadius: '6px' }}>Add</button>
+                  </div>
+                </div>
+              )}
+            </div>
+
+            <button onClick={onClose} style={{ marginTop: '1.5rem', padding: '0.5rem 1rem', background: 'transparent', color: '#6c757d', border: '2px solid #dee2e6', cursor: 'pointer', fontSize: '0.875rem', borderRadius: '6px', width: '100%' }}>Close</button>
+          </div>
+        </div>
+      );
+    }
+
+    function ProductSelector({ onSelect, productCatalog, onClose }) {
+      const [category, setCategory] = useState('all');
+      
+      const categories = ['all', 'cabinets', 'panels', 'trim', 'upgrades', 'specialty'];
+      const filteredProducts = category === 'all' ? productCatalog : productCatalog.filter(p => p.category === category);
+
+      return (
+        <div style={{ position: 'fixed', top: 0, left: 0, right: 0, bottom: 0, background: 'rgba(0,0,0,0.5)', display: 'flex', alignItems: 'center', justifyContent: 'center', zIndex: 1000, padding: '2rem' }}>
+          <div style={{ background: 'white', padding: '2rem', borderRadius: '8px', boxShadow: '0 4px 20px rgba(0,0,0,0.15)', maxWidth: '900px', width: '100%', maxHeight: '80vh', overflow: 'auto' }}>
+            <h3 style={{ marginTop: 0, color: BRAND_COLORS.primary }}>Select Product</h3>
+            
+            <div style={{ display: 'flex', gap: '0.5rem', marginBottom: '1.5rem', flexWrap: 'wrap' }}>
+              {categories.map(cat => (
+                <button key={cat} onClick={() => setCategory(cat)} style={{ padding: '0.5rem 1rem', background: category === cat ? BRAND_COLORS.primary : '#f8f9fa', color: category === cat ? 'white' : BRAND_COLORS.primary, border: '2px solid', borderColor: category === cat ? BRAND_COLORS.primary : '#dee2e6', fontSize: '0.75rem', fontWeight: '500', cursor: 'pointer', borderRadius: '6px', textTransform: 'uppercase' }}>
+                  {cat}
+                </button>
+              ))}
+            </div>
+
+            <div style={{ display: 'flex', flexDirection: 'column', gap: '0.5rem', marginBottom: '1rem' }}>
+              {filteredProducts.map(product => (
+                <button key={product.id} onClick={() => onSelect(product.id)} style={{ padding: '1rem', background: '#f8f9fa', color: '#212529', border: '2px solid #dee2e6', cursor: 'pointer', fontSize: '0.875rem', borderRadius: '6px', textAlign: 'left', transition: 'all 0.2s' }}>
+                  <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+                    <div>
+                      <div style={{ fontWeight: '600', color: BRAND_COLORS.primary }}>{product.name}</div>
+                      <div style={{ fontSize: '0.75rem', color: '#6c757d', marginTop: '0.25rem' }}>{product.description}</div>
+                    </div>
+                    <div style={{ textAlign: 'right', fontSize: '0.75rem' }}>
+                      <div>${(product.materialCostPerUnit + product.laborCostPerUnit).toFixed(2)}</div>
+                      <div style={{ color: '#6c757d' }}>per {product.unit}</div>
+                    </div>
+                  </div>
+                </button>
+              ))}
+            </div>
+
+            <button onClick={onClose} style={{ padding: '0.75rem 1.5rem', background: 'transparent', color: '#6c757d', border: '2px solid #dee2e6', cursor: 'pointer', fontSize: '0.875rem', borderRadius: '6px', width: '100%' }}>Cancel</button>
+          </div>
+        </div>
+      );
+    }
+
+    function PricingReviewStep({ quote, setQuote, totals, onNext, onBack }) {
+      return (
+        <div>
+          <h2 style={{ marginTop: 0, color: BRAND_COLORS.primary, fontSize: '1.75rem', fontWeight: '600', marginBottom: '2rem' }}>Pricing & Review</h2>
+
+          <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '2rem' }}>
+            <div style={{ background: 'white', padding: '2rem', borderRadius: '8px', boxShadow: '0 2px 8px rgba(0,0,0,0.1)', display: 'flex', flexDirection: 'column', gap: '1.5rem' }}>
+              <h3 style={{ margin: 0, color: BRAND_COLORS.primary, fontSize: '1.25rem' }}>Pricing Controls</h3>
+
+              <div>
+                <label style={{ display: 'block', marginBottom: '0.5rem', fontSize: '0.875rem', color: '#495057', fontWeight: '600' }}>MARGIN OPTION</label>
+                <select value={quote.marginOption} onChange={(e) => setQuote(prev => ({ ...prev, marginOption: parseInt(e.target.value) }))} style={{ width: '100%', padding: '0.75rem', background: '#f8f9fa', border: '2px solid #dee2e6', color: '#212529', fontSize: '0.875rem', borderRadius: '6px', outline: 'none' }}>
+                  {MARGIN_OPTIONS.map((option, idx) => (
+                    <option key={idx} value={idx}>{option.label} ({(option.markup * 100).toFixed(0)}% markup)</option>
+                  ))}
+                </select>
+                <div style={{ color: '#6c757d', fontSize: '0.75rem', marginTop: '0.5rem' }}>Applied to materials and labor costs</div>
+              </div>
+
+              <div>
+                <label style={{ display: 'block', marginBottom: '0.5rem', fontSize: '0.875rem', color: '#495057', fontWeight: '600' }}>DELIVERY COST</label>
+                <input type="number" value={quote.deliveryCost} onChange={(e) => setQuote(prev => ({ ...prev, deliveryCost: parseFloat(e.target.value) || 0 }))} style={{ width: '100%', padding: '0.75rem', background: '#f8f9fa', border: '2px solid #dee2e6', color: '#212529', fontSize: '0.875rem', borderRadius: '6px', outline: 'none' }} />
+                <div style={{ color: '#6c757d', fontSize: '0.75rem', marginTop: '0.5rem' }}>Not subject to markup (typically $1,600 for 2 loads)</div>
+              </div>
+
+              <div>
+                <label style={{ display: 'block', marginBottom: '0.5rem', fontSize: '0.875rem', color: '#495057', fontWeight: '600' }}>INSTALLATION (%)</label>
+                <input type="number" value={quote.installationPercent} onChange={(e) => setQuote(prev => ({ ...prev, installationPercent: parseFloat(e.target.value) || 0 }))} style={{ width: '100%', padding: '0.75rem', background: '#f8f9fa', border: '2px solid #dee2e6', color: '#212529', fontSize: '0.875rem', borderRadius: '6px', outline: 'none' }} />
+                <div style={{ color: '#6c757d', fontSize: '0.75rem', marginTop: '0.5rem' }}>Percentage of subtotal with margin (default 20%)</div>
+              </div>
+
+              <div>
+                <label style={{ display: 'block', marginBottom: '0.5rem', fontSize: '0.875rem', color: '#495057', fontWeight: '600' }}>COMMISSION (%)</label>
+                <input type="number" value={quote.commissionPercent} onChange={(e) => setQuote(prev => ({ ...prev, commissionPercent: parseFloat(e.target.value) || 0 }))} style={{ width: '100%', padding: '0.75rem', background: '#f8f9fa', border: '2px solid #dee2e6', color: '#212529', fontSize: '0.875rem', borderRadius: '6px', outline: 'none' }} />
+                <div style={{ color: '#6c757d', fontSize: '0.75rem', marginTop: '0.5rem' }}>Percentage of subtotal with margin (default 5%)</div>
+              </div>
+            </div>
+
+            <div style={{ background: 'white', padding: '2rem', borderRadius: '8px', boxShadow: '0 2px 8px rgba(0,0,0,0.1)' }}>
+              <h3 style={{ marginTop: 0, color: BRAND_COLORS.primary, fontSize: '1.25rem', marginBottom: '1.5rem' }}>Quote Summary</h3>
+              
+              <div style={{ display: 'flex', flexDirection: 'column', gap: '0.75rem' }}>
+                <div style={{ display: 'flex', justifyContent: 'space-between', paddingBottom: '0.75rem', borderBottom: '1px solid #dee2e6' }}>
+                  <span style={{ color: '#6c757d', fontSize: '0.875rem' }}>Materials Cost:</span>
+                  <span style={{ color: '#212529', fontSize: '0.875rem', fontWeight: '600' }}>${totals.totalMaterials.toLocaleString('en-US', { minimumFractionDigits: 2 })}</span>
+                </div>
+                
+                <div style={{ display: 'flex', justifyContent: 'space-between', paddingBottom: '0.75rem', borderBottom: '1px solid #dee2e6' }}>
+                  <span style={{ color: '#6c757d', fontSize: '0.875rem' }}>Labor Cost:</span>
+                  <span style={{ color: '#212529', fontSize: '0.875rem', fontWeight: '600' }}>${totals.totalLabor.toLocaleString('en-US', { minimumFractionDigits: 2 })}</span>
+                </div>
+                
+                <div style={{ display: 'flex', justifyContent: 'space-between', paddingBottom: '0.75rem', borderBottom: '2px solid #dee2e6' }}>
+                  <span style={{ color: '#495057', fontSize: '0.9375rem', fontWeight: '600' }}>Subtotal Cost:</span>
+                  <span style={{ color: '#212529', fontSize: '0.9375rem', fontWeight: '700' }}>${totals.subtotalCost.toLocaleString('en-US', { minimumFractionDigits: 2 })}</span>
+                </div>
+                
+                <div style={{ display: 'flex', justifyContent: 'space-between', paddingBottom: '0.75rem', borderBottom: '1px solid #dee2e6' }}>
+                  <span style={{ color: '#6c757d', fontSize: '0.875rem' }}>Margin Applied ({(totals.marginData.markup * 100).toFixed(0)}% markup):</span>
+                  <span style={{ color: BRAND_COLORS.primary, fontSize: '0.875rem', fontWeight: '600' }}>+${(totals.subtotalWithMargin - totals.subtotalCost).toLocaleString('en-US', { minimumFractionDigits: 2 })}</span>
+                </div>
+                
+                <div style={{ display: 'flex', justifyContent: 'space-between', paddingBottom: '0.75rem', borderBottom: '2px solid #dee2e6' }}>
+                  <span style={{ color: '#495057', fontSize: '0.9375rem', fontWeight: '600' }}>Subtotal with Margin:</span>
+                  <span style={{ color: '#212529', fontSize: '0.9375rem', fontWeight: '700' }}>${totals.subtotalWithMargin.toLocaleString('en-US', { minimumFractionDigits: 2 })}</span>
+                </div>
+                
+                {totals.faceFrameUpcharge > 0 && (
+                  <div style={{ display: 'flex', justifyContent: 'space-between', paddingBottom: '0.75rem', borderBottom: '1px solid #dee2e6' }}>
+                    <span style={{ color: '#6c757d', fontSize: '0.875rem' }}>Face Frame Upcharge (15%):</span>
+                    <span style={{ color: BRAND_COLORS.primary, fontSize: '0.875rem', fontWeight: '600' }}>+${totals.faceFrameUpcharge.toLocaleString('en-US', { minimumFractionDigits: 2 })}</span>
+                  </div>
+                )}
+                
+                <div style={{ display: 'flex', justifyContent: 'space-between', paddingBottom: '0.75rem', borderBottom: '1px solid #dee2e6' }}>
+                  <span style={{ color: '#6c757d', fontSize: '0.875rem' }}>Delivery:</span>
+                  <span style={{ color: '#212529', fontSize: '0.875rem', fontWeight: '600' }}>+${totals.deliveryCost.toLocaleString('en-US', { minimumFractionDigits: 2 })}</span>
+                </div>
+                
+                <div style={{ display: 'flex', justifyContent: 'space-between', paddingBottom: '0.75rem', borderBottom: '1px solid #dee2e6' }}>
+                  <span style={{ color: '#6c757d', fontSize: '0.875rem' }}>Installation ({quote.installationPercent}%):</span>
+                  <span style={{ color: '#212529', fontSize: '0.875rem', fontWeight: '600' }}>+${totals.installationCost.toLocaleString('en-US', { minimumFractionDigits: 2 })}</span>
+                </div>
+                
+                <div style={{ display: 'flex', justifyContent: 'space-between', paddingBottom: '0.75rem', borderBottom: '1px solid #dee2e6' }}>
+                  <span style={{ color: '#6c757d', fontSize: '0.875rem' }}>Commission ({quote.commissionPercent}%):</span>
+                  <span style={{ color: '#212529', fontSize: '0.875rem', fontWeight: '600' }}>+${totals.commissionCost.toLocaleString('en-US', { minimumFractionDigits: 2 })}</span>
+                </div>
+                
+                <div style={{ display: 'flex', justifyContent: 'space-between', paddingTop: '1.5rem', marginTop: '1rem', borderTop: `3px solid ${BRAND_COLORS.primary}` }}>
+                  <span style={{ color: BRAND_COLORS.primary, fontWeight: '700', fontSize: '1.25rem' }}>TOTAL QUOTE:</span>
+                  <span style={{ color: BRAND_COLORS.primary, fontWeight: '700', fontSize: '1.5rem' }}>${totals.totalQuotePrice.toLocaleString('en-US', { minimumFractionDigits: 2 })}</span>
+                </div>
+              </div>
+            </div>
+          </div>
+
+          <div style={{ display: 'flex', justifyContent: 'space-between', marginTop: '2rem' }}>
+            <button onClick={onBack} style={{ padding: '0.75rem 1.5rem', background: 'white', color: BRAND_COLORS.primary, border: `2px solid ${BRAND_COLORS.primary}`, fontSize: '0.875rem', fontWeight: '600', cursor: 'pointer', borderRadius: '6px' }}>← Back to Build</button>
+            <button onClick={onNext} style={{ padding: '0.75rem 2rem', background: BRAND_COLORS.primary, color: 'white', border: 'none', fontSize: '1rem', fontWeight: '600', cursor: 'pointer', borderRadius: '6px' }}>Continue to Document →</button>
+          </div>
+        </div>
+      );
+    }
+
+    function QuoteDocumentStep({ quote, totals, productCatalog, onBack }) {
+      const constructionDesc = quote.constructionType === 'frameless' ? 'Frameless, Overlay' : 'Face Frame with Inset';
+
+      return (
+        <div>
+          <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '2rem' }} className="no-print">
+            <h2 style={{ margin: 0, color: BRAND_COLORS.primary, fontSize: '1.75rem', fontWeight: '600' }}>Quote Document</h2>
+            <div style={{ display: 'flex', gap: '1rem' }}>
+              <button onClick={() => window.print()} style={{ padding: '0.75rem 1.5rem', background: BRAND_COLORS.primary, color: 'white', border: 'none', fontSize: '0.875rem', fontWeight: '600', cursor: 'pointer', borderRadius: '6px' }}>🖨️ Print / Save PDF</button>
+            </div>
+          </div>
+
+          <div style={{ background: 'white', padding: '3rem', borderRadius: '8px', boxShadow: '0 2px 8px rgba(0,0,0,0.1)', maxWidth: '800px', margin: '0 auto' }}>
+            <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'start', marginBottom: '2rem', paddingBottom: '1rem', borderBottom: `3px solid ${BRAND_COLORS.primary}` }}>
+              <div>
+                <div style={{ fontWeight: '700', fontSize: '1.75rem', color: BRAND_COLORS.primary, fontFamily: 'Georgia, serif' }}>SUMMIT CABINETS</div>
+                <div style={{ fontSize: '0.875rem', color: '#6c757d', marginTop: '0.25rem' }}>Full Custom Cabinetry</div>
+              </div>
+              <div style={{ textAlign: 'right' }}>
+                <div style={{ fontSize: '0.875rem', color: '#6c757d' }}>Quote #</div>
+                <div style={{ fontSize: '1.25rem', fontWeight: '700', color: BRAND_COLORS.primary }}>{quote.quoteNumber || 'XXXX'}</div>
+                <div style={{ fontSize: '0.875rem', color: '#6c757d', marginTop: '0.5rem' }}>{quote.quoteDate}</div>
+              </div>
+            </div>
+
+            <div style={{ marginBottom: '2rem' }}>
+              <div style={{ fontSize: '1.5rem', fontWeight: '600', color: '#212529', marginBottom: '0.5rem' }}>
+                {quote.quoteNumber}-{quote.customerName}
+              </div>
+              <div style={{ color: '#6c757d', fontSize: '1rem' }}>{quote.projectName}</div>
+            </div>
+
+            <div style={{ background: '#f8f9fa', padding: '1rem', borderRadius: '6px', marginBottom: '2rem', fontSize: '0.875rem', color: '#495057' }}>
+              Quoted as {constructionDesc}, {quote.finish} or Stained, {quote.doorStyle}-style doors & drawers, unless otherwise noted.
+            </div>
+
+            {quote.rooms.map(room => (
+              <div key={room.id} style={{ marginBottom: '2rem' }}>
+                <h3 style={{ color: BRAND_COLORS.primary, fontSize: '1.125rem', fontWeight: '600', marginBottom: '0.75rem' }}>{room.name}:</h3>
+                <p style={{ color: '#495057', fontSize: '0.9375rem', lineHeight: '1.6', margin: 0 }}>
+                  {room.customNarrative || generateRoomNarrative(room, productCatalog)}
+                </p>
+              </div>
+            ))}
+
+            {quote.additionalNotes && (
+              <div style={{ marginBottom: '2rem' }}>
+                <p style={{ color: '#495057', fontSize: '0.9375rem', lineHeight: '1.6', margin: 0 }}>{quote.additionalNotes}</p>
+              </div>
+            )}
+
+            <div style={{ background: BRAND_COLORS.primary, color: 'white', padding: '1.5rem', borderRadius: '6px', marginBottom: '2rem', textAlign: 'center' }}>
+              <div style={{ fontSize: '1rem', marginBottom: '0.5rem', opacity: 0.9 }}>Total Investment</div>
+              <div style={{ fontSize: '3rem', fontWeight: '700' }}>${totals.totalQuotePrice.toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}</div>
+            </div>
+
+            <div style={{ fontSize: '0.8125rem', color: '#6c757d', lineHeight: '1.6', whiteSpace: 'pre-line' }}>
+              {BOILERPLATE_TEXT}
+            </div>
+          </div>
+
+          <div style={{ display: 'flex', justifyContent: 'space-between', marginTop: '2rem', maxWidth: '800px', margin: '2rem auto 0' }} className="no-print">
+            <button onClick={onBack} style={{ padding: '0.75rem 1.5rem', background: 'white', color: BRAND_COLORS.primary, border: `2px solid ${BRAND_COLORS.primary}`, fontSize: '0.875rem', fontWeight: '600', cursor: 'pointer', borderRadius: '6px' }}>← Back to Edit</button>
+            <button onClick={() => {
+              const quoteData = JSON.stringify(quote, null, 2);
+              const blob = new Blob([quoteData], { type: 'application/json' });
+              const url = URL.createObjectURL(blob);
+              const a = document.createElement('a');
+              a.href = url;
+              a.download = `quote-${quote.quoteNumber}-${quote.customerName.replace(/\s+/g, '-')}.json`;
+              a.click();
+              alert('Quote saved!');
+            }} style={{ padding: '0.75rem 2rem', background: BRAND_COLORS.primary, color: 'white', border: 'none', fontSize: '1rem', fontWeight: '600', cursor: 'pointer', borderRadius: '6px' }}>💾 Save Quote Data</button>
+          </div>
+        </div>
+      );
+    }
+
+    // Render the app
+    const root = ReactDOM.createRoot(document.getElementById('root'));
+    root.render(React.createElement(SummitQuoteBuilder));
+  </script>
+</body>
+</html>

@@ -1,0 +1,29 @@
+id,name,description,unit,category,materialCostPerUnit,laborCostPerUnit,narrativeTemplate
+1,Base Cabinets,"Standard 24"" Deep - 1 Drawer over Door - assumes 1 Drawer per 2-1/2 Feet",LF,cabinets,109.53,37.00,"base cabinets with ({drawers}) drawers/rollouts"
+2,36" Tall - Wall Cabinets,13" Deep,LF,cabinets,90.73,37.00,36" tall wall cabinets
+3,42" Tall - Wall Cabinet,13" Deep,LF,cabinets,96.14,37.00,42" tall wall cabinets
+4,54" Tall - Wall Cabinet,13" Deep,LF,cabinets,109.77,37.00,54" tall wall cabinets
+5,Tall Oven Cabinet,Up to 9',LF,cabinets,190.82,37.00,tall double oven cabinetry
+6,Tall Pantry,Up to 9',LF,cabinets,185.23,37.00,tall pantry cabinets
+7,Fridge Enclosure,Up to 9',LF,cabinets,164.28,37.00,fridge enclosure
+8,Oven Hood - Box Style,"Straight line and/or basic angles - Non-Swoop 24"" Deep 36"" Tall",LF,cabinets,109.77,37.00,oven hood
+9,Purchased Hood,Type Description and Cost including Shipping - Paint Labor Added,LF,cabinets,0.00,37.00,purchased hood
+10,Vanity,Standard 21" Deep - 1 Drawer over Door,LF,cabinets,95.60,37.00,"base cabinets with ({drawers}) drawers"
+11,Tall Integrated Panel,Up to 108" x 26" - match to door style - includes paint and install,EA,panels,232.43,37.00,integrated finished end panels on exposed ends
+12,Base Cabinet Integrated Panel,26" x 24" Deep - match to door style - includes paint and install,EA,panels,109.77,37.00,integrated panels
+13,Wall Cabinet Integrated Panel,54" x 13" Deep - match to door style - includes paint and install,EA,panels,109.77,37.00,integrated panels
+14,Base Flat Finished End,Painted plywood made in house,EA,panels,27.35,24.67,flat finished end panels
+15,Wall Flat Finished End,Painted plywood made in house,EA,panels,16.41,24.67,flat finished end panels
+16,Tall Flat Finished End,Painted plywood made in house,EA,panels,38.23,24.67,flat finished end panels
+17,Mud Bench,Plywood w/ hardwood nosing DOES NOT INCLUDE WOOD TOP,LF,specialty,54.89,37.00,mud bench
+18,Wood Top,3/4" plywood faceframe stock,LF,specialty,43.70,37.00,wood top
+19,12" Deep Painted Bookcase 36" Tall,Painted interior and shelves,LF,specialty,60.30,37.00,36" tall bookcase
+20,12" Deep Painted Bookcase 96" Tall,Painted interior and shelves,LF,specialty,147.12,37.00,96" tall bookcase
+21,Glass in Doors,"Plain glass, specialty glass may add cost",SF,upgrades,30.00,12.33,plain glass in doors
+22,Extra Drawer/Pullout,Account for extra drawers and pullouts,EA,upgrades,32.89,12.33,additional drawers/pullouts
+23,Trash Pull out/Spice Rack/Etc.,"Average Pricing, actual selections may affect price",EA,upgrades,98.67,12.33,trash pullout/organizers
+24,Floating Shelves,2" Thick x 12" Deep,LF,specialty,27.35,12.33,floating shelves
+25,Crown,Standard 4",LF,trim,4.11,4.93,crown molding
+26,Base Trim,Standard 4",LF,trim,4.11,4.93,base trim
+27,Toe Kick,Finished to match cabinet,LF,trim,2.74,2.47,toe kick
+28,12" Deep Painted Bookcase 72" Tall,Painted interior and shelves,LF,specialty,109.77,37.00,72" tall bookcase

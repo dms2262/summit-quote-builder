@@ -202,6 +202,8 @@ Appliance Disclaimer: Summit Cabinets designs and builds cabinets according to m
       let narrative = "";
       const cabinets = [], panels = [], trim = [], upgrades = [];
       let totalDrawers = 0;
+      let extraDrawers = 0;
+      let organizers = 0;
 
       room.lineItems.forEach(item => {
         const product = PRODUCT_CATALOG.find(p => p.id === item.productId);
@@ -217,6 +219,11 @@ Appliance Disclaimer: Summit Cabinets designs and builds cabinets according to m
         } else if (product.category === 'trim') {
           trim.push({ product, qty: item.quantity });
         } else if (product.category === 'upgrades') {
+          if (product.name.includes('Extra Drawer')) {
+            extraDrawers += item.quantity;
+          } else if (product.name.includes('Trash Pull')) {
+            organizers += item.quantity;
+          }
           upgrades.push({ product, qty: item.quantity });
         }
       });
@@ -224,7 +231,7 @@ Appliance Disclaimer: Summit Cabinets designs and builds cabinets according to m
       if (cabinets.length > 0) {
         const cabinetDescriptions = cabinets.map(({ product, qty }) => {
           let desc = product.narrativeTemplate || product.name;
-          desc = desc.replace("{drawers}", totalDrawers);
+          desc = desc.replace("{drawers}", totalDrawers + " drawers allotted");
           return `${Math.round(qty)} LF of ${desc}`;
         });
         narrative += "Approximately " + cabinetDescriptions.join(". These numbers include ") + ". ";
@@ -235,13 +242,33 @@ Appliance Disclaimer: Summit Cabinets designs and builds cabinets according to m
       }
 
       if (upgrades.length > 0) {
-        narrative += upgrades.map(({ product }) => product.narrativeTemplate || product.name).join(", ") + ". ";
+        const upgradeDescs = [];
+        if (extraDrawers > 0) upgradeDescs.push(`(${extraDrawers}) additional drawers/pullouts`);
+        if (organizers > 0) upgradeDescs.push(`(${organizers}) trash pullout/organizers`);
+        
+        upgrades.forEach(({ product, qty }) => {
+          if (!product.name.includes('Extra Drawer') && !product.name.includes('Trash Pull')) {
+            upgradeDescs.push(product.narrativeTemplate || product.name);
+          }
+        });
+        
+        if (upgradeDescs.length > 0) {
+          narrative += upgradeDescs.join(", ") + ". ";
+        }
       }
 
       if (trim.length > 0) {
         narrative += "Also includes all trim including " + 
           trim.map(({ product }) => product.narrativeTemplate || product.name.toLowerCase()).join(", ") + 
           " for each area.";
+      }
+
+      const customerNotesList = room.lineItems
+        .filter(item => item.customerNotes && item.customerNotes.trim())
+        .map(item => item.customerNotes);
+      
+      if (customerNotesList.length > 0) {
+        narrative += " " + customerNotesList.join(" ");
       }
 
       return narrative || "Custom cabinetry as specified.";
@@ -331,7 +358,8 @@ Appliance Disclaimer: Summit Cabinets designs and builds cabinets according to m
           quantityInches: 0,
           materialCostPer: isCustom ? 0 : product.materialCostPerUnit,
           laborCostPer: isCustom ? 0 : product.laborCostPerUnit,
-          notes: '',
+          internalNotes: '',
+          customerNotes: '',
           isCustom: isCustom
         };
 
@@ -699,7 +727,6 @@ Appliance Disclaimer: Summit Cabinets designs and builds cabinets according to m
                   <option>Shaker</option>
                   <option>Flat Panel</option>
                   <option>Raised Panel</option>
-                  <option>Beadboard</option>
                 </select>
               </div>
               <div>
@@ -842,14 +869,30 @@ Appliance Disclaimer: Summit Cabinets designs and builds cabinets according to m
                       </button>
                     </div>
                     
-                    {/* Notes Field */}
-                    <div style={{ marginTop: '0.5rem' }}>
-                      <textarea
-                        value={item.notes || ''}
-                        onChange={(e) => updateLineItem(room.id, item.id, { notes: e.target.value })}
-                        placeholder="Notes about this item..."
-                        style={{ width: '100%', padding: '0.5rem', background: 'white', border: '2px solid #dee2e6', color: '#212529', fontSize: '0.75rem', borderRadius: '6px', outline: 'none', minHeight: '50px', resize: 'vertical', fontFamily: 'inherit' }}
-                      />
+                    {/* Notes Fields */}
+                    <div style={{ marginTop: '0.5rem', display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '0.5rem' }}>
+                      <div>
+                        <label style={{ display: 'block', fontSize: '0.7rem', color: '#856404', fontWeight: '600', marginBottom: '0.25rem', background: '#fff3cd', padding: '0.25rem 0.5rem', borderRadius: '3px' }}>
+                          INTERNAL NOTES (Team Only)
+                        </label>
+                        <textarea
+                          value={item.internalNotes || ''}
+                          onChange={(e) => updateLineItem(room.id, item.id, { internalNotes: e.target.value })}
+                          placeholder="Notes for team..."
+                          style={{ width: '100%', padding: '0.5rem', background: 'white', border: '2px solid #ffc107', color: '#212529', fontSize: '0.75rem', borderRadius: '6px', outline: 'none', minHeight: '50px', resize: 'vertical', fontFamily: 'inherit' }}
+                        />
+                      </div>
+                      <div>
+                        <label style={{ display: 'block', fontSize: '0.7rem', color: BRAND_COLORS.primary, fontWeight: '600', marginBottom: '0.25rem', background: '#e7f3ff', padding: '0.25rem 0.5rem', borderRadius: '3px' }}>
+                          CUSTOMER NOTES (On Quote)
+                        </label>
+                        <textarea
+                          value={item.customerNotes || ''}
+                          onChange={(e) => updateLineItem(room.id, item.id, { customerNotes: e.target.value })}
+                          placeholder="Notes for customer..."
+                          style={{ width: '100%', padding: '0.5rem', background: 'white', border: '2px solid #007bff', color: '#212529', fontSize: '0.75rem', borderRadius: '6px', outline: 'none', minHeight: '50px', resize: 'vertical', fontFamily: 'inherit' }}
+                        />
+                      </div>
                     </div>
                   </div>
                 );
@@ -964,10 +1007,9 @@ Appliance Disclaimer: Summit Cabinets designs and builds cabinets according to m
       // Compile all internal notes from line items
       const compiledInternalNotes = quote.rooms.map(room => {
         const roomNotes = room.lineItems
-          .filter(item => item.notes && item.notes.trim())
+          .filter(item => item.internalNotes && item.internalNotes.trim())
           .map(item => {
-            const product = quote.rooms.find(r => r.id === room.id)?.lineItems.find(i => i.id === item.id);
-            return `• ${item.notes}`;
+            return `• ${item.internalNotes}`;
           });
         
         if (roomNotes.length > 0) {

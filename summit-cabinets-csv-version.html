@@ -144,9 +144,9 @@ Appliance Disclaimer: Summit Cabinets designs and builds cabinets according to m
           let value = values[index] || '';
           
           if (header === 'id') {
-            obj[header] = parseInt(value);
+            obj[header] = parseInt(value) || 0;
           } else if (header === 'materialCostPerUnit' || header === 'laborCostPerUnit') {
-            obj[header] = parseFloat(value);
+            obj[header] = parseFloat(value) || 0;
           } else {
             obj[header] = value;
           }
@@ -964,7 +964,7 @@ Appliance Disclaimer: Summit Cabinets designs and builds cabinets according to m
     function ProductSelector({ onSelect, productCatalog, onClose }) {
       const [category, setCategory] = useState('all');
       
-      const categories = ['all', 'cabinets', 'panels', 'trim', 'upgrades', 'specialty'];
+      const categories = ['all', 'cabinets', 'hoods', 'panels', 'trim', 'upgrades', 'specialty'];
       const filteredProducts = category === 'all' ? productCatalog : productCatalog.filter(p => p.category === category);
 
       return (

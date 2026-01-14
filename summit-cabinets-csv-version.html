@@ -319,14 +319,17 @@ Appliance Disclaimer: Summit Cabinets designs and builds cabinets according to m
         }));
       };
 
-      const addLineItem = (roomId, productId) => {
+      const addLineItem = (roomId, productId, isCustom = false) => {
         const product = productCatalog.find(p => p.id === productId);
         const newItem = {
           id: Date.now(),
           productId: productId,
           quantity: 0,
-          materialCostPer: product.materialCostPerUnit,
-          laborCostPer: product.laborCostPerUnit
+          quantityInches: 0,
+          materialCostPer: isCustom ? 0 : product.materialCostPerUnit,
+          laborCostPer: isCustom ? 0 : product.laborCostPerUnit,
+          notes: '',
+          isCustom: isCustom
         };
 
         setQuote(prev => ({
@@ -611,6 +614,10 @@ Appliance Disclaimer: Summit Cabinets designs and builds cabinets according to m
             <div style={{ display: 'flex', gap: '0.5rem' }}>
               <button onClick={() => setShowTrimSuggestions(true)} style={{ padding: '0.5rem 1rem', background: '#f8f9fa', color: BRAND_COLORS.primary, border: '2px solid #dee2e6', fontSize: '0.75rem', fontWeight: '500', cursor: 'pointer', borderRadius: '6px' }}>Suggest Trim</button>
               <button onClick={() => setShowProductSelector(true)} style={{ padding: '0.5rem 1rem', background: BRAND_COLORS.primary, color: 'white', border: 'none', fontSize: '0.75rem', fontWeight: '500', cursor: 'pointer', borderRadius: '6px' }}>+ Add Item</button>
+              <button onClick={() => {
+                const customProduct = { id: 999999, name: 'Custom Item', description: 'Enter custom material and labor costs', unit: 'EA', category: 'custom', materialCostPerUnit: 0, laborCostPerUnit: 0 };
+                addLineItem(room.id, customProduct.id, true);
+              }} style={{ padding: '0.5rem 1rem', background: '#28a745', color: 'white', border: 'none', fontSize: '0.75rem', fontWeight: '500', cursor: 'pointer', borderRadius: '6px' }}>+ Custom Item</button>
               <button onClick={() => deleteRoom(room.id)} style={{ padding: '0.5rem 1rem', background: '#dc3545', color: 'white', border: 'none', fontSize: '0.75rem', fontWeight: '500', cursor: 'pointer', borderRadius: '6px' }}>Delete</button>
             </div>
           </div>
@@ -623,22 +630,121 @@ Appliance Disclaimer: Summit Cabinets designs and builds cabinets according to m
           ) : (
             <div style={{ display: 'flex', flexDirection: 'column', gap: '0.5rem' }}>
               {room.lineItems.map(item => {
-                const product = productCatalog.find(p => p.id === item.productId);
+                const product = item.isCustom 
+                  ? { id: 999999, name: 'Custom Item', description: 'Custom pricing', unit: 'EA', category: 'custom' }
+                  : productCatalog.find(p => p.id === item.productId);
+                
                 const extended = (item.quantity || 0) * (item.materialCostPer + item.laborCostPer);
                 
+                // Check if this product should allow inch/foot entry
+                const allowsInchEntry = product && (
+                  product.name.includes('Base Cabinets') ||
+                  product.name.includes('Wall Cabinet') ||
+                  product.name.includes('Vanity') ||
+                  product.name.includes('Tall Oven') ||
+                  product.name.includes('Tall Pantry') ||
+                  product.name.includes('Mud Bench') ||
+                  product.name.includes('Floating Shelves') ||
+                  product.name.includes('Bookcase')
+                );
+                
                 return (
-                  <div key={item.id} style={{ display: 'grid', gridTemplateColumns: '2fr 1fr 1fr 1fr auto', gap: '1rem', alignItems: 'center', padding: '0.75rem', background: '#f8f9fa', borderRadius: '6px' }}>
-                    <div>
-                      <div style={{ color: '#212529', fontSize: '0.875rem', fontWeight: '600' }}>{product?.name}</div>
-                      <div style={{ color: '#6c757d', fontSize: '0.75rem', marginTop: '0.25rem' }}>{product?.description}</div>
+                  <div key={item.id} style={{ padding: '1rem', background: '#f8f9fa', borderRadius: '6px', border: '1px solid #dee2e6' }}>
+                    <div style={{ display: 'grid', gridTemplateColumns: item.isCustom ? '2fr 1fr 1fr 1fr auto' : '2fr 1fr 1fr 1fr auto', gap: '1rem', alignItems: 'center', marginBottom: '0.5rem' }}>
+                      <div>
+                        <div style={{ color: '#212529', fontSize: '0.875rem', fontWeight: '600' }}>{product?.name}</div>
+                        <div style={{ color: '#6c757d', fontSize: '0.75rem', marginTop: '0.25rem' }}>{product?.description}</div>
+                      </div>
+                      
+                      {/* Quantity Input */}
+                      <div>
+                        {allowsInchEntry ? (
+                          <div>
+                            <input 
+                              type="number" 
+                              value={item.quantityInches || ''} 
+                              onChange={(e) => {
+                                const inches = parseFloat(e.target.value) || 0;
+                                const feet = inches / 12;
+                                updateLineItem(room.id, item.id, { quantityInches: inches, quantity: feet });
+                              }}
+                              placeholder="Inches"
+                              style={{ width: '100%', padding: '0.5rem', background: 'white', border: '2px solid #dee2e6', color: '#212529', fontSize: '0.875rem', borderRadius: '6px', outline: 'none', marginBottom: '0.25rem' }}
+                            />
+                            <div style={{ display: 'flex', alignItems: 'center', gap: '0.5rem' }}>
+                              <input 
+                                type="number" 
+                                value={item.quantity || ''} 
+                                onChange={(e) => {
+                                  const feet = parseFloat(e.target.value) || 0;
+                                  const inches = feet * 12;
+                                  updateLineItem(room.id, item.id, { quantity: feet, quantityInches: inches });
+                                }}
+                                placeholder="Feet"
+                                style={{ width: '100%', padding: '0.5rem', background: 'white', border: '2px solid #dee2e6', color: '#212529', fontSize: '0.875rem', borderRadius: '6px', outline: 'none' }}
+                              />
+                              <span style={{ color: '#6c757d', fontSize: '0.75rem', whiteSpace: 'nowrap' }}>LF</span>
+                            </div>
+                          </div>
+                        ) : (
+                          <div>
+                            <input 
+                              type="number" 
+                              value={item.quantity || ''} 
+                              onChange={(e) => updateLineItem(room.id, item.id, { quantity: parseFloat(e.target.value) || 0 })}
+                              placeholder="0"
+                              style={{ width: '100%', padding: '0.5rem', background: 'white', border: '2px solid #dee2e6', color: '#212529', fontSize: '0.875rem', borderRadius: '6px', outline: 'none' }}
+                            />
+                            <div style={{ color: '#6c757d', fontSize: '0.75rem', marginTop: '0.25rem' }}>{product?.unit}</div>
+                          </div>
+                        )}
+                      </div>
+
+                      {/* Cost Per Unit (editable for custom items) */}
+                      {item.isCustom ? (
+                        <div>
+                          <input 
+                            type="number" 
+                            value={item.materialCostPer || ''} 
+                            onChange={(e) => updateLineItem(room.id, item.id, { materialCostPer: parseFloat(e.target.value) || 0 })}
+                            placeholder="Material $"
+                            style={{ width: '100%', padding: '0.5rem', background: 'white', border: '2px solid #dee2e6', color: '#212529', fontSize: '0.875rem', borderRadius: '6px', outline: 'none', marginBottom: '0.25rem' }}
+                          />
+                          <input 
+                            type="number" 
+                            value={item.laborCostPer || ''} 
+                            onChange={(e) => updateLineItem(room.id, item.id, { laborCostPer: parseFloat(e.target.value) || 0 })}
+                            placeholder="Labor $"
+                            style={{ width: '100%', padding: '0.5rem', background: 'white', border: '2px solid #dee2e6', color: '#212529', fontSize: '0.875rem', borderRadius: '6px', outline: 'none' }}
+                          />
+                        </div>
+                      ) : (
+                        <div style={{ color: '#6c757d', fontSize: '0.875rem' }}>
+                          ${(item.materialCostPer + item.laborCostPer).toFixed(2)}/{product?.unit}
+                        </div>
+                      )}
+
+                      <div style={{ color: BRAND_COLORS.primary, fontSize: '0.875rem', fontWeight: '600' }}>
+                        ${extended.toFixed(2)}
+                      </div>
+
+                      <button 
+                        onClick={() => deleteLineItem(room.id, item.id)} 
+                        style={{ padding: '0.5rem', background: '#dc3545', color: 'white', border: 'none', fontSize: '0.75rem', cursor: 'pointer', borderRadius: '6px' }}
+                      >
+                        ✕
+                      </button>
                     </div>
-                    <div>
-                      <input type="number" value={item.quantity || ''} onChange={(e) => updateLineItem(room.id, item.id, { quantity: parseFloat(e.target.value) || 0 })} placeholder="0" style={{ width: '100%', padding: '0.5rem', background: 'white', border: '2px solid #dee2e6', color: '#212529', fontSize: '0.875rem', borderRadius: '6px', outline: 'none' }} />
-                      <div style={{ color: '#6c757d', fontSize: '0.75rem', marginTop: '0.25rem' }}>{product?.unit}</div>
+                    
+                    {/* Notes Field */}
+                    <div style={{ marginTop: '0.5rem' }}>
+                      <textarea
+                        value={item.notes || ''}
+                        onChange={(e) => updateLineItem(room.id, item.id, { notes: e.target.value })}
+                        placeholder="Notes about this item..."
+                        style={{ width: '100%', padding: '0.5rem', background: 'white', border: '2px solid #dee2e6', color: '#212529', fontSize: '0.75rem', borderRadius: '6px', outline: 'none', minHeight: '50px', resize: 'vertical', fontFamily: 'inherit' }}
+                      />
                     </div>
-                    <div style={{ color: '#6c757d', fontSize: '0.875rem' }}>${(item.materialCostPer + item.laborCostPer).toFixed(2)}/{product?.unit}</div>
-                    <div style={{ color: BRAND_COLORS.primary, fontSize: '0.875rem', fontWeight: '600' }}>${extended.toFixed(2)}</div>
-                    <button onClick={() => deleteLineItem(room.id, item.id)} style={{ padding: '0.5rem', background: '#dc3545', color: 'white', border: 'none', fontSize: '0.75rem', cursor: 'pointer', borderRadius: '6px' }}>✕</button>
                   </div>
                 );
               })}

@@ -8,7 +8,7 @@ id,name,description,unit,category,materialCostPerUnit,laborCostPerUnit,narrative
 7,Fridge Enclosure,Up to 9',LF,cabinets,145.36,37.00,fridge enclosure
 8,Oven Hood - Box Style,"Straight line and/or basic angles - Non-Swoop 24"" Deep 36"" Tall",LF,hoods,118.86,135.67,oven hood - box style
 9,Oven Hood - Compound Curves,"Compund Curves - 24"" Deep 36"" Tall",LF,hoods,150.25,175.52,oven hood  - compound curves
-10,Vanity,"Standard 21"" Deep - 1 Drawer over Door",LF,cabinets,108.44,37.00,base cabinets with ({drawers}) drawers
+10,Vanity,"Standard 24"" Deep - 1 Drawer over Door - assumes 1 Drawer per 2-1/2 Feet",LF,cabinets,108.44,37.00,base cabinets with ({drawers}) drawers
 11,Tall Integrated Panel,"Up to 108"" x 26"" - match to door style - includes paint and install",EA,panels,457.12,123.33,integrated finished end panels on exposed ends
 12,Base Cabinet Integrated Panel,"26"" x 24"" Deep - match to door style - includes paint and install",EA,panels,156.70,46.25,integrated panels
 13,Wall Cabinet Integrated Panel,"54"" x 13"" Deep - match to door style - includes paint and install",EA,panels,137.19,46.25,integrated panels

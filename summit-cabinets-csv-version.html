@@ -324,7 +324,6 @@ Appliance Disclaimer: Summit Cabinets designs and builds cabinets according to m
         const newRoom = {
           id: Date.now(),
           name: roomType,
-          flatPanel: false,
           raisedPanel: false,
           finish: 'Painted',
           faceFrame: false,
@@ -432,7 +431,7 @@ Appliance Disclaimer: Summit Cabinets designs and builds cabinets according to m
           }
           
           // Apply door style upcharge per room if selected (5%)
-          if (room.flatPanel || room.raisedPanel) {
+          if (room.raisedPanel) {
             doorStyleUpcharge += roomWithMargin * 0.05;
           }
         });
@@ -496,16 +495,8 @@ Appliance Disclaimer: Summit Cabinets designs and builds cabinets according to m
           zIndex: 1000
         }}>
           <div style={{ maxWidth: '1400px', margin: '0 auto', display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
-            <div style={{ display: 'flex', alignItems: 'center', gap: '1rem' }}>
-              <img src="summit-logo.png" alt="Summit Cabinets" style={{ height: '50px', width: 'auto' }} onError={(e) => { e.target.style.display = 'none'; }} />
-              <div>
-                <div style={{ fontWeight: '700', fontSize: '1.5rem', color: BRAND_COLORS.primary, fontFamily: 'Georgia, serif' }}>
-                  SUMMIT CABINETS
-                </div>
-                <div style={{ fontSize: '0.75rem', color: '#666', marginTop: '0.25rem' }}>
-                  Full Custom Quote Builder
-                </div>
-              </div>
+            <div style={{ display: 'flex', alignItems: 'center' }}>
+              <img src="summit-logo.png" alt="Summit Cabinets" style={{ height: '60px', width: 'auto' }} onError={(e) => { e.target.style.display = 'none'; }} />
             </div>
             <div style={{ textAlign: 'right' }}>
               <div style={{ fontSize: '0.875rem', color: '#666' }}>Quote Total</div>
@@ -666,7 +657,7 @@ Appliance Disclaimer: Summit Cabinets designs and builds cabinets according to m
       
       return (
         <div>
-          <div style={{ position: 'sticky', top: '0', zIndex: 100, background: 'linear-gradient(135deg, #f8f9fa 0%, #e9ecef 100%)', padding: '1rem 0', marginBottom: '1rem' }}>
+          <div style={{ position: 'sticky', top: '168px', zIndex: 100, background: 'linear-gradient(135deg, #f8f9fa 0%, #e9ecef 100%)', padding: '1rem 0', marginBottom: '1rem' }}>
             <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
               <h2 style={{ margin: 0, color: BRAND_COLORS.primary, fontSize: '1.75rem', fontWeight: '600' }}>Build Quote - Room by Room</h2>
               <button onClick={() => setShowRoomSelector(true)} style={{ padding: '0.75rem 1.5rem', background: BRAND_COLORS.primary, color: 'white', border: 'none', fontSize: '0.875rem', fontWeight: '600', cursor: 'pointer', borderRadius: '6px', transition: 'all 0.2s', boxShadow: '0 2px 8px rgba(53,70,133,0.3)' }}>+ Add Room</button>
@@ -787,31 +778,17 @@ Appliance Disclaimer: Summit Cabinets designs and builds cabinets according to m
             <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr 1fr', gap: '1rem' }}>
               <div>
                 <label style={{ display: 'block', marginBottom: '0.25rem', fontSize: '0.75rem', color: '#495057', fontWeight: '600' }}>DOOR STYLE UPCHARGE</label>
-                <div style={{ display: 'flex', alignItems: 'center', gap: '1rem', height: '36px' }}>
-                  <div style={{ display: 'flex', alignItems: 'center' }}>
-                    <input 
-                      type="checkbox" 
-                      id={`flat-panel-${room.id}`}
-                      checked={room.flatPanel} 
-                      onChange={(e) => updateRoom(room.id, { flatPanel: e.target.checked, raisedPanel: false })} 
-                      style={{ marginRight: '0.5rem', width: '18px', height: '18px', cursor: 'pointer' }}
-                    />
-                    <label htmlFor={`flat-panel-${room.id}`} style={{ fontSize: '0.875rem', color: '#212529', cursor: 'pointer' }}>
-                      Flat Panel (+5%)
-                    </label>
-                  </div>
-                  <div style={{ display: 'flex', alignItems: 'center' }}>
-                    <input 
-                      type="checkbox" 
-                      id={`raised-panel-${room.id}`}
-                      checked={room.raisedPanel} 
-                      onChange={(e) => updateRoom(room.id, { raisedPanel: e.target.checked, flatPanel: false })} 
-                      style={{ marginRight: '0.5rem', width: '18px', height: '18px', cursor: 'pointer' }}
-                    />
-                    <label htmlFor={`raised-panel-${room.id}`} style={{ fontSize: '0.875rem', color: '#212529', cursor: 'pointer' }}>
-                      Raised Panel (+5%)
-                    </label>
-                  </div>
+                <div style={{ display: 'flex', alignItems: 'center', height: '36px' }}>
+                  <input 
+                    type="checkbox" 
+                    id={`raised-panel-${room.id}`}
+                    checked={room.raisedPanel} 
+                    onChange={(e) => updateRoom(room.id, { raisedPanel: e.target.checked })} 
+                    style={{ marginRight: '0.5rem', width: '18px', height: '18px', cursor: 'pointer' }}
+                  />
+                  <label htmlFor={`raised-panel-${room.id}`} style={{ fontSize: '0.875rem', color: '#212529', cursor: 'pointer' }}>
+                    Raised Panel (+5%)
+                  </label>
                 </div>
               </div>
               <div>
@@ -1276,7 +1253,7 @@ Appliance Disclaimer: Summit Cabinets designs and builds cabinets according to m
 
             {quote.rooms.map(room => {
               const constructionDesc = room.faceFrame ? 'Face Frame with Inset' : 'Frameless, Overlay';
-              const doorStyle = room.raisedPanel ? 'Raised Panel' : room.flatPanel ? 'Flat Panel' : 'Shaker';
+              const doorStyle = room.raisedPanel ? 'Raised Panel' : 'Shaker';
               return (
                 <div key={room.id} style={{ marginBottom: '2rem' }}>
                   <h3 style={{ color: BRAND_COLORS.primary, fontSize: '1.125rem', fontWeight: '600', marginBottom: '0.5rem' }}>{room.name}:</h3>

@@ -324,7 +324,8 @@ Appliance Disclaimer: Summit Cabinets designs and builds cabinets according to m
         const newRoom = {
           id: Date.now(),
           name: roomType,
-          doorStyle: 'Shaker',
+          flatPanel: false,
+          raisedPanel: false,
           finish: 'Painted',
           faceFrame: false,
           lineItems: [],
@@ -410,6 +411,7 @@ Appliance Disclaimer: Summit Cabinets designs and builds cabinets according to m
         let totalMaterials = 0;
         let totalLabor = 0;
         let faceFrameUpcharge = 0;
+        let doorStyleUpcharge = 0;
 
         quote.rooms.forEach(room => {
           let roomSubtotal = 0;
@@ -421,20 +423,26 @@ Appliance Disclaimer: Summit Cabinets designs and builds cabinets according to m
             roomSubtotal += (item.materialCostPer * qty) + (item.laborCostPer * qty);
           });
 
+          const marginData = MARGIN_OPTIONS[quote.marginOption];
+          const roomWithMargin = roomSubtotal * (1 + marginData.markup);
+          
           // Apply face frame upcharge per room if selected
           if (room.faceFrame) {
-            const marginData = MARGIN_OPTIONS[quote.marginOption];
-            const roomWithMargin = roomSubtotal * (1 + marginData.markup);
             faceFrameUpcharge += roomWithMargin * 0.15;
+          }
+          
+          // Apply door style upcharge per room if selected (5%)
+          if (room.flatPanel || room.raisedPanel) {
+            doorStyleUpcharge += roomWithMargin * 0.05;
           }
         });
 
         const subtotalCost = totalMaterials + totalLabor;
         const marginData = MARGIN_OPTIONS[quote.marginOption];
         const subtotalWithMargin = subtotalCost * (1 + marginData.markup);
-        const installationCost = (subtotalWithMargin + faceFrameUpcharge) * (quote.installationPercent / 100);
-        const commissionCost = (subtotalWithMargin + faceFrameUpcharge) * (quote.commissionPercent / 100);
-        const totalQuotePrice = subtotalWithMargin + faceFrameUpcharge + quote.deliveryCost + installationCost + commissionCost;
+        const installationCost = (subtotalWithMargin + faceFrameUpcharge + doorStyleUpcharge) * (quote.installationPercent / 100);
+        const commissionCost = (subtotalWithMargin + faceFrameUpcharge + doorStyleUpcharge) * (quote.commissionPercent / 100);
+        const totalQuotePrice = subtotalWithMargin + faceFrameUpcharge + doorStyleUpcharge + quote.deliveryCost + installationCost + commissionCost;
 
         return {
           totalMaterials,
@@ -443,6 +451,7 @@ Appliance Disclaimer: Summit Cabinets designs and builds cabinets according to m
           marginData,
           subtotalWithMargin,
           faceFrameUpcharge,
+          doorStyleUpcharge,
           deliveryCost: quote.deliveryCost,
           installationCost,
           commissionCost,
@@ -481,15 +490,21 @@ Appliance Disclaimer: Summit Cabinets designs and builds cabinets according to m
           background: 'white',
           padding: '1.5rem 2rem',
           borderBottom: `3px solid ${BRAND_COLORS.primary}`,
-          boxShadow: '0 2px 8px rgba(0,0,0,0.1)'
+          boxShadow: '0 2px 8px rgba(0,0,0,0.1)',
+          position: 'sticky',
+          top: 0,
+          zIndex: 1000
         }}>
           <div style={{ maxWidth: '1400px', margin: '0 auto', display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
-            <div>
-              <div style={{ fontWeight: '700', fontSize: '1.5rem', color: BRAND_COLORS.primary, fontFamily: 'Georgia, serif' }}>
-                SUMMIT CABINETS
-              </div>
-              <div style={{ fontSize: '0.75rem', color: '#666', marginTop: '0.25rem' }}>
-                Full Custom Quote Builder
+            <div style={{ display: 'flex', alignItems: 'center', gap: '1rem' }}>
+              <img src="summit-logo.png" alt="Summit Cabinets" style={{ height: '50px', width: 'auto' }} onError={(e) => { e.target.style.display = 'none'; }} />
+              <div>
+                <div style={{ fontWeight: '700', fontSize: '1.5rem', color: BRAND_COLORS.primary, fontFamily: 'Georgia, serif' }}>
+                  SUMMIT CABINETS
+                </div>
+                <div style={{ fontSize: '0.75rem', color: '#666', marginTop: '0.25rem' }}>
+                  Full Custom Quote Builder
+                </div>
               </div>
             </div>
             <div style={{ textAlign: 'right' }}>
@@ -505,7 +520,7 @@ Appliance Disclaimer: Summit Cabinets designs and builds cabinets according to m
 
     function StepNavigation({ step, setStep }) {
       return (
-        <div style={{ background: 'white', padding: '1rem 2rem', borderBottom: '1px solid #dee2e6', boxShadow: '0 1px 3px rgba(0,0,0,0.05)' }} className="no-print">
+        <div style={{ background: 'white', padding: '1rem 2rem', borderBottom: '1px solid #dee2e6', boxShadow: '0 1px 3px rgba(0,0,0,0.05)', position: 'sticky', top: '94px', zIndex: 999 }} className="no-print">
           <div style={{ maxWidth: '1400px', margin: '0 auto', display: 'flex', gap: '2rem' }}>
             {['Project Info', 'Build Quote', 'Pricing & Review', 'Generate Document'].map((label, idx) => (
               <button key={idx} onClick={() => setStep(idx + 1)} style={{
@@ -696,7 +711,6 @@ Appliance Disclaimer: Summit Cabinets designs and builds cabinets according to m
 
     function RoomCard({ room, updateRoom, deleteRoom, addLineItem, updateLineItem, deleteLineItem, productCatalog }) {
       const [showProductSelector, setShowProductSelector] = useState(false);
-      const [showTrimSuggestions, setShowTrimSuggestions] = useState(false);
       const [editingName, setEditingName] = useState(false);
 
       const trimSuggestions = calculateTrimSuggestions(room.lineItems, productCatalog);
@@ -741,7 +755,22 @@ Appliance Disclaimer: Summit Cabinets designs and builds cabinets according to m
               </span>
             </div>
             <div style={{ display: 'flex', gap: '0.5rem' }}>
-              <button onClick={() => setShowTrimSuggestions(true)} style={{ padding: '0.5rem 1rem', background: '#f8f9fa', color: BRAND_COLORS.primary, border: '2px solid #dee2e6', fontSize: '0.75rem', fontWeight: '500', cursor: 'pointer', borderRadius: '6px' }}>Suggest Trim</button>
+              <button onClick={() => {
+                // Auto-add all trim with suggested quantities
+                const trimSugg = calculateTrimSuggestions(room.lineItems, productCatalog);
+                if (trimSugg.crown > 0) {
+                  const crownProduct = productCatalog.find(p => p.name === 'Crown');
+                  if (crownProduct) addLineItem(room.id, crownProduct.id, false, trimSugg.crown);
+                }
+                if (trimSugg.toeKick > 0) {
+                  const toeKickProduct = productCatalog.find(p => p.name === 'Toe Kick');
+                  if (toeKickProduct) addLineItem(room.id, toeKickProduct.id, false, trimSugg.toeKick);
+                }
+                if (trimSugg.baseTrim > 0) {
+                  const baseTrimProduct = productCatalog.find(p => p.name === 'Base Trim');
+                  if (baseTrimProduct) addLineItem(room.id, baseTrimProduct.id, false, trimSugg.baseTrim);
+                }
+              }} style={{ padding: '0.5rem 1rem', background: '#17a2b8', color: 'white', border: 'none', fontSize: '0.75rem', fontWeight: '500', cursor: 'pointer', borderRadius: '6px' }}>+ Add Trim</button>
               <button onClick={() => setShowProductSelector(true)} style={{ padding: '0.5rem 1rem', background: BRAND_COLORS.primary, color: 'white', border: 'none', fontSize: '0.75rem', fontWeight: '500', cursor: 'pointer', borderRadius: '6px' }}>+ Add Item</button>
               <button onClick={() => {
                 const customProduct = { id: 999999, name: 'Custom Item', description: 'Enter custom material and labor costs', unit: 'EA', category: 'custom', materialCostPerUnit: 0, laborCostPerUnit: 0 };
@@ -757,12 +786,33 @@ Appliance Disclaimer: Summit Cabinets designs and builds cabinets according to m
           <div style={{ background: '#f8f9fa', padding: '1rem', borderRadius: '6px', marginBottom: '1rem', border: '1px solid #dee2e6' }}>
             <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr 1fr', gap: '1rem' }}>
               <div>
-                <label style={{ display: 'block', marginBottom: '0.25rem', fontSize: '0.75rem', color: '#495057', fontWeight: '600' }}>DOOR STYLE</label>
-                <select value={room.doorStyle} onChange={(e) => updateRoom(room.id, { doorStyle: e.target.value })} style={{ width: '100%', padding: '0.5rem', background: 'white', border: '1px solid #dee2e6', color: '#212529', fontSize: '0.875rem', borderRadius: '4px', outline: 'none' }}>
-                  <option>Shaker</option>
-                  <option>Flat Panel</option>
-                  <option>Raised Panel</option>
-                </select>
+                <label style={{ display: 'block', marginBottom: '0.25rem', fontSize: '0.75rem', color: '#495057', fontWeight: '600' }}>DOOR STYLE UPCHARGE</label>
+                <div style={{ display: 'flex', alignItems: 'center', gap: '1rem', height: '36px' }}>
+                  <div style={{ display: 'flex', alignItems: 'center' }}>
+                    <input 
+                      type="checkbox" 
+                      id={`flat-panel-${room.id}`}
+                      checked={room.flatPanel} 
+                      onChange={(e) => updateRoom(room.id, { flatPanel: e.target.checked, raisedPanel: false })} 
+                      style={{ marginRight: '0.5rem', width: '18px', height: '18px', cursor: 'pointer' }}
+                    />
+                    <label htmlFor={`flat-panel-${room.id}`} style={{ fontSize: '0.875rem', color: '#212529', cursor: 'pointer' }}>
+                      Flat Panel (+5%)
+                    </label>
+                  </div>
+                  <div style={{ display: 'flex', alignItems: 'center' }}>
+                    <input 
+                      type="checkbox" 
+                      id={`raised-panel-${room.id}`}
+                      checked={room.raisedPanel} 
+                      onChange={(e) => updateRoom(room.id, { raisedPanel: e.target.checked, flatPanel: false })} 
+                      style={{ marginRight: '0.5rem', width: '18px', height: '18px', cursor: 'pointer' }}
+                    />
+                    <label htmlFor={`raised-panel-${room.id}`} style={{ fontSize: '0.875rem', color: '#212529', cursor: 'pointer' }}>
+                      Raised Panel (+5%)
+                    </label>
+                  </div>
+                </div>
               </div>
               <div>
                 <label style={{ display: 'block', marginBottom: '0.25rem', fontSize: '0.75rem', color: '#495057', fontWeight: '600' }}>FINISH</label>
@@ -790,7 +840,6 @@ Appliance Disclaimer: Summit Cabinets designs and builds cabinets according to m
             </div>
           </div>
 
-          {showTrimSuggestions && <TrimSuggestionsModal trimSuggestions={trimSuggestions} roomId={room.id} addLineItem={addLineItem} updateLineItem={updateLineItem} productCatalog={productCatalog} onClose={() => setShowTrimSuggestions(false)} />}
           {showProductSelector && <ProductSelector onSelect={(productId) => { addLineItem(room.id, productId); setShowProductSelector(false); }} productCatalog={productCatalog} onClose={() => setShowProductSelector(false)} />}
 
           {room.lineItems.length === 0 ? (
@@ -1124,6 +1173,13 @@ Appliance Disclaimer: Summit Cabinets designs and builds cabinets according to m
                   </div>
                 )}
                 
+                {totals.doorStyleUpcharge > 0 && (
+                  <div style={{ display: 'flex', justifyContent: 'space-between', paddingBottom: '0.75rem', borderBottom: '1px solid #dee2e6' }}>
+                    <span style={{ color: '#6c757d', fontSize: '0.875rem' }}>Door Style Upcharge (5%):</span>
+                    <span style={{ color: BRAND_COLORS.primary, fontSize: '0.875rem', fontWeight: '600' }}>+${totals.doorStyleUpcharge.toLocaleString('en-US', { minimumFractionDigits: 2 })}</span>
+                  </div>
+                )}
+                
                 <div style={{ display: 'flex', justifyContent: 'space-between', paddingBottom: '0.75rem', borderBottom: '1px solid #dee2e6' }}>
                   <span style={{ color: '#6c757d', fontSize: '0.875rem' }}>Delivery:</span>
                   <span style={{ color: '#212529', fontSize: '0.875rem', fontWeight: '600' }}>+${totals.deliveryCost.toLocaleString('en-US', { minimumFractionDigits: 2 })}</span>
@@ -1220,11 +1276,12 @@ Appliance Disclaimer: Summit Cabinets designs and builds cabinets according to m
 
             {quote.rooms.map(room => {
               const constructionDesc = room.faceFrame ? 'Face Frame with Inset' : 'Frameless, Overlay';
+              const doorStyle = room.raisedPanel ? 'Raised Panel' : room.flatPanel ? 'Flat Panel' : 'Shaker';
               return (
                 <div key={room.id} style={{ marginBottom: '2rem' }}>
                   <h3 style={{ color: BRAND_COLORS.primary, fontSize: '1.125rem', fontWeight: '600', marginBottom: '0.5rem' }}>{room.name}:</h3>
                   <div style={{ fontSize: '0.8125rem', color: '#6c757d', fontStyle: 'italic', marginBottom: '0.5rem' }}>
-                    {constructionDesc}, {room.finish}, {room.doorStyle}-style doors & drawers
+                    {constructionDesc}, {room.finish}, {doorStyle}-style doors & drawers
                   </div>
                   <p style={{ color: '#495057', fontSize: '0.9375rem', lineHeight: '1.6', margin: 0 }}>
                     {room.customNarrative || generateRoomNarrative(room, productCatalog)}
